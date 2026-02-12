@@ -6,4 +6,3 @@ __pycache__/
 *.xlsx
 !templates/portfolio_template.xlsx
 dashboard_screenshot.png
-dashboard_with_data.png
