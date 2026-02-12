@@ -19,7 +19,8 @@ from risk.cvar import conditional_var, compute_all_cvar
 from risk.metrics import (
     annualized_return, annualized_volatility, sharpe_ratio, sortino_ratio,
     max_drawdown, drawdown_series, risk_contribution, compute_asset_class_metrics,
-    compute_asset_metrics,
+    compute_asset_metrics, composite_benchmark_returns, tracking_error,
+    information_ratio,
 )
 from risk.correlation import correlation_matrix, asset_class_correlation
 from output.excel_report import generate_report
@@ -301,20 +302,33 @@ def _register_callbacks(app: dash.Dash):
             )
             port_ret = portfolio_returns(asset_ret, weights)
 
+            # ── Composite benchmark ──
+            comp_bench = composite_benchmark_returns(bench_ret, portfolio)
+
             # ── KPI Cards ──
             total_ret = cumulative_returns(port_ret).iloc[-1]
+            bench_total_ret = cumulative_returns(comp_bench).iloc[-1]
             ann_vol = annualized_volatility(port_ret)
             sharpe_val = sharpe_ratio(port_ret)
             var_95 = historical_var(port_ret, confidence)
             mdd = max_drawdown(port_ret)
+            te = tracking_error(port_ret, comp_bench)
+            ir = information_ratio(port_ret, comp_bench)
+            active_ret = annualized_return(port_ret) - annualized_return(comp_bench)
 
             def _fmt_pct(v):
                 return f"{v:+.2%}" if v != 0 else "0.00%"
 
             kpi_cards = [
-                _kpi_card("Total Return", _fmt_pct(total_ret),
+                _kpi_card("Portfolio Return", _fmt_pct(total_ret),
                           GREEN if total_ret >= 0 else RED),
-                _kpi_card("Ann. Volatility", f"{ann_vol:.2%}", ORANGE),
+                _kpi_card("Benchmark Return", _fmt_pct(bench_total_ret),
+                          GREEN if bench_total_ret >= 0 else RED),
+                _kpi_card("Active Return", _fmt_pct(active_ret),
+                          GREEN if active_ret >= 0 else RED),
+                _kpi_card("Tracking Error", f"{te:.2%}", ORANGE),
+                _kpi_card("Info Ratio", f"{ir:.2f}",
+                          GREEN if ir > 0.5 else ORANGE if ir > 0 else RED),
                 _kpi_card("Sharpe Ratio", f"{sharpe_val:.2f}",
                           GREEN if sharpe_val > 1 else ORANGE if sharpe_val > 0 else RED),
                 _kpi_card(f"VaR ({confidence:.0%})", f"{var_95:.2%}", RED),
@@ -322,24 +336,29 @@ def _register_callbacks(app: dash.Dash):
             ]
 
             # ── Charts ──
-            # 1. Cumulative returns
+            # 1. Cumulative returns (portfolio vs composite benchmark)
             cum_port = cumulative_returns(port_ret)
+            cum_comp_bench = cumulative_returns(comp_bench)
             fig_cumret = _make_fig(
-                title="Cumulative Returns", height=350,
+                title="Cumulative Returns: Portfolio vs Benchmark", height=350,
                 yaxis_tickformat=".0%", margin=dict(t=40, b=30, l=50, r=20),
                 legend=dict(orientation="h", y=-0.15),
             )
             fig_cumret.add_trace(go.Scatter(
                 x=cum_port.index, y=cum_port.values,
-                name="Portfolio", line=dict(color=GREEN, width=2),
+                name="Portfolio", line=dict(color=GREEN, width=2.5),
             ))
-            for bench_ticker in portfolio["Benchmark"].unique():
-                if bench_ticker in bench_ret.columns:
-                    cum_bench = cumulative_returns(bench_ret[bench_ticker])
-                    fig_cumret.add_trace(go.Scatter(
-                        x=cum_bench.index, y=cum_bench.values,
-                        name=bench_ticker, line=dict(width=1, dash="dash"),
-                    ))
+            fig_cumret.add_trace(go.Scatter(
+                x=cum_comp_bench.index, y=cum_comp_bench.values,
+                name="Composite Benchmark", line=dict(color=ORANGE, width=2.5, dash="dash"),
+            ))
+            # Active return (spread)
+            active_cum = cum_port - cum_comp_bench
+            fig_cumret.add_trace(go.Scatter(
+                x=active_cum.index, y=active_cum.values,
+                name="Active Return", line=dict(color=BLUE, width=1, dash="dot"),
+                fill="tozeroy", fillcolor="rgba(41,121,255,0.1)",
+            ))
 
             # 2. Allocation donut
             ac_weights = portfolio.groupby("Asset Class")["Weight"].sum()

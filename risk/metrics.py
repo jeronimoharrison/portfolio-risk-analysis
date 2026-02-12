@@ -84,6 +84,36 @@ def tracking_error(
     return excess.std() * np.sqrt(TRADING_DAYS_PER_YEAR)
 
 
+def composite_benchmark_returns(
+    benchmark_returns: pd.DataFrame,
+    portfolio: pd.DataFrame,
+) -> pd.Series:
+    """Compute weighted composite benchmark returns at portfolio level.
+
+    Each holding's benchmark is weighted by the holding's portfolio weight,
+    producing a single blended benchmark return series.
+    """
+    bench_ret = pd.Series(0.0, index=benchmark_returns.index)
+    for _, row in portfolio.iterrows():
+        bench_ticker = row["Benchmark"]
+        weight = row["Weight"]
+        if bench_ticker in benchmark_returns.columns:
+            bench_ret = bench_ret + weight * benchmark_returns[bench_ticker].fillna(0)
+    return bench_ret
+
+
+def information_ratio(
+    portfolio_returns: pd.Series,
+    benchmark_returns: pd.Series,
+) -> float:
+    """Annualized information ratio (active return / tracking error)."""
+    active_ret = annualized_return(portfolio_returns) - annualized_return(benchmark_returns)
+    te = tracking_error(portfolio_returns, benchmark_returns)
+    if te == 0:
+        return 0.0
+    return active_ret / te
+
+
 def risk_contribution(
     asset_returns: pd.DataFrame,
     weights: pd.Series,

@@ -13,7 +13,8 @@ from risk.cvar import compute_all_cvar, per_asset_cvar
 from risk.metrics import (
     annualized_return, annualized_volatility, sharpe_ratio, sortino_ratio,
     max_drawdown, compute_asset_metrics, compute_asset_class_metrics,
-    risk_contribution,
+    risk_contribution, composite_benchmark_returns, tracking_error,
+    information_ratio,
 )
 from risk.correlation import correlation_matrix
 
@@ -152,11 +153,20 @@ def generate_report(
     ws_summary.cell(row=2, column=1, value=f"Period: {asset_returns.index.min().date()} to {asset_returns.index.max().date()}")
     ws_summary.cell(row=3, column=1, value=f"Holdings: {len(portfolio)}")
 
+    # Composite benchmark
+    comp_bench = composite_benchmark_returns(benchmark_returns, portfolio)
+    te = tracking_error(port_ret, comp_bench)
+    ir = information_ratio(port_ret, comp_bench)
+
     # Aggregate metrics
     metrics = {
-        "Total Return": cumulative_returns(port_ret).iloc[-1] if len(port_ret) > 0 else 0,
+        "Portfolio Return": cumulative_returns(port_ret).iloc[-1] if len(port_ret) > 0 else 0,
+        "Benchmark Return": cumulative_returns(comp_bench).iloc[-1] if len(comp_bench) > 0 else 0,
+        "Active Return": annualized_return(port_ret) - annualized_return(comp_bench),
         "Annualized Return": annualized_return(port_ret),
         "Annualized Volatility": annualized_volatility(port_ret),
+        "Tracking Error": te,
+        "Information Ratio": ir,
         "Sharpe Ratio": sharpe_ratio(port_ret),
         "Sortino Ratio": sortino_ratio(port_ret),
         "Max Drawdown": max_drawdown(port_ret),

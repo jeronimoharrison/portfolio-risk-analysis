@@ -97,15 +97,24 @@ Examples:
     weights = pd.Series(portfolio["Weight"].values, index=portfolio["Ticker"].values)
     port_ret = portfolio_returns(asset_ret, weights)
 
-    # Print summary
-    from risk.metrics import annualized_return, annualized_volatility, sharpe_ratio, max_drawdown
+    # Composite benchmark
+    from risk.metrics import (
+        annualized_return, annualized_volatility, sharpe_ratio, max_drawdown,
+        composite_benchmark_returns, tracking_error, information_ratio,
+    )
     from risk.var import historical_var
     from risk.returns import cumulative_returns
+
+    comp_bench = composite_benchmark_returns(bench_ret, portfolio)
 
     print("\n-- Portfolio Summary --")
     print(f"  Total Return:      {cumulative_returns(port_ret).iloc[-1]:+.2%}")
     print(f"  Ann. Return:       {annualized_return(port_ret):+.2%}")
+    print(f"  Benchmark Return:  {annualized_return(comp_bench):+.2%}")
+    print(f"  Active Return:     {annualized_return(port_ret) - annualized_return(comp_bench):+.2%}")
     print(f"  Ann. Volatility:   {annualized_volatility(port_ret):.2%}")
+    print(f"  Tracking Error:    {tracking_error(port_ret, comp_bench):.2%}")
+    print(f"  Information Ratio: {information_ratio(port_ret, comp_bench):.2f}")
     print(f"  Sharpe Ratio:      {sharpe_ratio(port_ret):.2f}")
     print(f"  Max Drawdown:      {max_drawdown(port_ret):.2%}")
     print(f"  VaR (95%):         {historical_var(port_ret, 0.95):.2%}")
